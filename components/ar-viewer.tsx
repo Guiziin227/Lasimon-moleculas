@@ -9,80 +9,88 @@ interface ARViewerProps {
   pdbData: string;
 }
 
-const MARKER_IMAGE_URL =
-  "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Captura%20de%20tela%202025-06-20%20124759-bRbEioGOryXhjbZQVPYCU4UfStt1Dn.png";
-
 export default function ARViewer({ pdbData }: ARViewerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const detectionCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const moleculeGroupRef = useRef<THREE.Group | null>(null);
+  const rotationVelocityRef = useRef({ x: 0, y: 0 });
   const [markerDetected, setMarkerDetected] = useState(false);
   const [stats, setStats] = useState({ atoms: 0, bonds: 0 });
   const [cameraGranted, setCameraGranted] = useState(false);
-  const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const rotationVelocityRef = useRef({ x: 0, y: 0 });
+  const [cameraError, setCameraError] = useState<string>("");
 
-  const detectMarker = (canvas: HTMLCanvasElement): boolean => {
-    try {
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return false;
-
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-
-      let darkPixels = 0;
-      let whitePixels = 0;
-      const totalPixels = data.length / 4;
-
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        const brightness = (r + g + b) / 3;
-
-        if (brightness < 50) darkPixels++;
-        if (brightness > 200) whitePixels++;
-      }
-
-      const darkRatio = darkPixels / totalPixels;
-      const whiteRatio = whitePixels / totalPixels;
-
-      return (
-        darkRatio > 0.3 && whiteRatio > 0.15 && darkRatio + whiteRatio > 0.5
-      );
-    } catch {
-      return false;
-    }
-  };
-
+  // Inicialização da câmera com retry
   useEffect(() => {
+    let retryCount = 0;
+    const maxRetries = 3;
+
     const initCamera = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        // Parar qualquer stream existente
+        if (videoRef.current?.srcObject) {
+          const tracks = (
+            videoRef.current.srcObject as MediaStream
+          ).getTracks();
+          tracks.forEach((track) => track.stop());
+        }
+
+        const constraints = {
           video: {
             facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 },
           },
           audio: false,
-        });
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.onloadedmetadata = () => {
-            videoRef.current
-              ?.play()
-              .catch((err) => console.error("[v0] Play error:", err));
-            setCameraGranted(true);
+
+          // Garantir que o vídeo vai carregar
+          videoRef.current.setAttribute("playsinline", "true");
+          videoRef.current.setAttribute("webkit-playsinline", "true");
+
+          videoRef.current.onloadedmetadata = async () => {
+            try {
+              await videoRef.current?.play();
+              setCameraGranted(true);
+              setCameraError("");
+              console.log("✅ Câmera inicializada com sucesso");
+            } catch (err) {
+              console.error("Erro ao dar play:", err);
+              if (retryCount < maxRetries) {
+                retryCount++;
+                setTimeout(initCamera, 1000);
+              } else {
+                setCameraError("Não foi possível iniciar a câmera");
+              }
+            }
+          };
+
+          videoRef.current.onerror = (error) => {
+            console.error("Erro no vídeo:", error);
+            if (retryCount < maxRetries) {
+              retryCount++;
+              setTimeout(initCamera, 1000);
+            } else {
+              setCameraError("Erro ao carregar vídeo da câmera");
+            }
           };
         }
-      } catch (error) {
-        console.error("[v0] Camera access error:", error);
-        setCameraGranted(false);
+      } catch (error: any) {
+        console.error("❌ Erro ao acessar câmera:", error);
+        setCameraError(error?.message || "Erro desconhecido ao acessar câmera");
+
+        if (retryCount < maxRetries) {
+          retryCount++;
+          console.log(`Tentando novamente... (${retryCount}/${maxRetries})`);
+          setTimeout(initCamera, 1500);
+        }
       }
     };
 
@@ -96,6 +104,7 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
     };
   }, []);
 
+  // Renderização da cena 3D com TODOS os átomos
   useEffect(() => {
     if (!containerRef.current || !cameraGranted) return;
 
@@ -129,7 +138,8 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
 
     const { atoms, bonds } = parsePDB(pdbData);
 
-    const heavyAtoms = atoms.filter((atom) => atom.element !== "H");
+    // MOSTRAR TODOS OS ÁTOMOS, incluindo hidrogênio
+    const allAtoms = atoms; // Não filtrar mais!
 
     const moleculeGroup = new THREE.Group();
     scene.add(moleculeGroup);
@@ -139,7 +149,8 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
     const SCALE = 0.8;
     const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
 
-    heavyAtoms.forEach((atom) => {
+    // Renderizar TODOS os átomos
+    allAtoms.forEach((atom) => {
       const config = getAtomConfig(atom.element);
       const material = new THREE.MeshStandardMaterial({
         color: config.color,
@@ -149,18 +160,21 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
 
       const mesh = new THREE.Mesh(sphereGeometry, material);
       mesh.position.set(atom.x * SCALE, atom.y * SCALE, atom.z * SCALE);
+
+      // Ajustar tamanho - hidrogênio é menor
+      const radiusMultiplier = atom.element === "H" ? 0.25 : 0.35;
       mesh.scale.set(
-        config.radius * 0.35,
-        config.radius * 0.35,
-        config.radius * 0.35
+        config.radius * radiusMultiplier,
+        config.radius * radiusMultiplier,
+        config.radius * radiusMultiplier
       );
       moleculeGroup.add(mesh);
     });
 
-    const heavyAtomIndices = new Set(heavyAtoms.map((atom) => atom.index));
+    // Renderizar todas as ligações
+    const allAtomIndices = new Set(allAtoms.map((atom) => atom.index));
     const validBonds = bonds.filter(
-      (bond) =>
-        heavyAtomIndices.has(bond.atom1) && heavyAtomIndices.has(bond.atom2)
+      (bond) => allAtomIndices.has(bond.atom1) && allAtomIndices.has(bond.atom2)
     );
 
     validBonds.forEach((bond) => {
@@ -184,9 +198,12 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
           .addVectors(pos1, pos2)
           .multiplyScalar(0.5);
 
+        // Ligações mais finas para hidrogênio
+        const bondRadius =
+          atom1.element === "H" || atom2.element === "H" ? 0.1 : 0.2;
         const cylinderGeometry = new THREE.CylinderGeometry(
-          0.2,
-          0.2,
+          bondRadius,
+          bondRadius,
           distance * 0.65,
           12
         );
@@ -206,7 +223,10 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
       }
     });
 
-    setStats({ atoms: heavyAtoms.length, bonds: validBonds.length });
+    setStats({ atoms: allAtoms.length, bonds: validBonds.length });
+
+    // Sempre mostrar a molécula quando a câmera estiver pronta
+    moleculeGroup.visible = true;
 
     let isDragging = false;
     let previousTouch = { x: 0, y: 0 };
@@ -272,6 +292,9 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
 
         rotationVelocityRef.current.x *= 0.98;
         rotationVelocityRef.current.y *= 0.98;
+
+        // Rotação automática suave
+        moleculeGroupRef.current.rotation.y += 0.002;
       }
 
       rendererRef.current?.render(scene, camera);
@@ -315,45 +338,11 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
     };
   }, [pdbData, cameraGranted]);
 
+  // Atualizar estado de marcador detectado (sempre verdadeiro quando câmera estiver ativa)
   useEffect(() => {
-    if (!videoRef.current || !detectionCanvasRef.current || !cameraGranted)
-      return;
-
-    const detectionCanvas = detectionCanvasRef.current;
-    const ctx = detectionCanvas.getContext("2d");
-    if (!ctx) return;
-
-    detectionIntervalRef.current = setInterval(() => {
-      if (
-        videoRef.current &&
-        videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA
-      ) {
-        detectionCanvas.width = videoRef.current.videoWidth;
-        detectionCanvas.height = videoRef.current.videoHeight;
-
-        ctx.drawImage(
-          videoRef.current,
-          0,
-          0,
-          detectionCanvas.width,
-          detectionCanvas.height
-        );
-        const detected = detectMarker(detectionCanvas);
-        setMarkerDetected(detected);
-
-        if (moleculeGroupRef.current) {
-          moleculeGroupRef.current.visible = detected;
-          if (detected) {
-            moleculeGroupRef.current.rotation.y += 0.002;
-          }
-        }
-      }
-    }, 100);
-
-    return () => {
-      if (detectionIntervalRef.current)
-        clearInterval(detectionIntervalRef.current);
-    };
+    if (cameraGranted) {
+      setMarkerDetected(true);
+    }
   }, [cameraGranted]);
 
   return (
@@ -366,11 +355,9 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
         muted
       />
 
-      <canvas ref={detectionCanvasRef} className="hidden" />
-
       <div ref={containerRef} className="absolute inset-0" />
 
-      {markerDetected && (
+      {cameraGranted && (
         <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-black/70 text-white p-3 rounded-lg font-mono text-xs sm:text-sm z-10">
           <div className="font-bold mb-1">Molécula ATP</div>
           <div>Átomos: {stats.atoms}</div>
@@ -381,7 +368,7 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
       <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-10">
         <div
           className={`w-3 h-3 sm:w-4 sm:h-4 rounded-full transition-all ${
-            markerDetected
+            cameraGranted
               ? "bg-green-500 shadow-lg shadow-green-500"
               : "bg-red-500"
           }`}
@@ -390,27 +377,36 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
 
       {!cameraGranted && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-50">
-          <div className="bg-gray-900 text-white p-6 rounded-lg text-center max-w-xs">
-            <div className="font-bold mb-2">Permissão de Câmera</div>
-            <div className="text-sm mb-4">
-              Clique em permitir para usar a câmera
+          <div className="bg-gray-900 text-white p-6 rounded-lg text-center max-w-sm mx-4">
+            <div className="text-4xl mb-3">📹</div>
+            <div className="font-bold text-lg mb-2">Permissão de Câmera</div>
+            <div className="text-sm mb-4 text-gray-300">
+              {cameraError ||
+                "Precisamos acessar sua câmera para exibir a molécula em realidade aumentada"}
             </div>
             <button
               onClick={async () => {
                 try {
+                  setCameraError("");
                   const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
+                    video: {
+                      facingMode: "environment",
+                      width: { ideal: 1920 },
+                      height: { ideal: 1080 },
+                    },
                     audio: false,
                   });
                   if (videoRef.current) {
                     videoRef.current.srcObject = stream;
+                    await videoRef.current.play();
                     setCameraGranted(true);
                   }
-                } catch (error) {
-                  console.error("[v0] Camera error:", error);
+                } catch (error: any) {
+                  console.error("Erro na câmera:", error);
+                  setCameraError(error?.message || "Erro ao acessar câmera");
                 }
               }}
-              className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-medium"
+              className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-medium transition-colors"
             >
               Permitir Câmera
             </button>
@@ -419,18 +415,18 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
       )}
 
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white text-center px-4 py-3 rounded-lg text-xs sm:text-sm max-w-xs z-10">
-        {markerDetected ? (
+        {cameraGranted ? (
           <>
-            <div className="font-bold text-green-400">Marcador detectado!</div>
+            <div className="font-bold text-green-400">✅ Molécula visível!</div>
             <div className="text-gray-300 mt-1">
               Arraste para girar • Pinça para zoom
             </div>
           </>
         ) : (
           <>
-            <div>Posicione o marcador na câmera</div>
+            <div>Aguardando permissão da câmera</div>
             <div className="text-gray-400 text-xs mt-1">
-              Aguardando detecção...
+              Clique no botão acima
             </div>
           </>
         )}
