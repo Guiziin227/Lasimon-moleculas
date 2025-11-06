@@ -2,7 +2,7 @@
 
 import { getAtomConfig } from "@/lib/atom-config";
 import { parsePDB } from "@/lib/pdb-parser";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 interface ARViewerProps {
@@ -13,6 +13,7 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const detectionCanvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -26,86 +27,131 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
   const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Detectar marcador via análise de imagem MELHORADA
-  const detectMarker = (canvas: HTMLCanvasElement): boolean => {
-    try {
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return false;
+  const detectMarker = useCallback(() => {
+    if (!videoRef.current || !detectionCanvasRef.current) return false;
 
-      const width = canvas.width;
-      const height = canvas.height;
+    const canvas = detectionCanvasRef.current;
+    const video = videoRef.current;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return false;
 
-      // Analisar apenas região central (onde o marcador deve estar)
-      const centerX = width / 2;
-      const centerY = height / 2;
-      const regionSize = Math.min(width, height) * 0.4; // 40% do centro
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
 
-      const startX = Math.floor(centerX - regionSize / 2);
-      const startY = Math.floor(centerY - regionSize / 2);
-      const endX = Math.floor(centerX + regionSize / 2);
-      const endY = Math.floor(centerY + regionSize / 2);
+    // Analyze only the center 50% of the frame
+    const centerX = canvas.width * 0.25;
+    const centerY = canvas.height * 0.25;
+    const centerWidth = canvas.width * 0.5;
+    const centerHeight = canvas.height * 0.5;
 
-      const imageData = ctx.getImageData(
-        startX,
-        startY,
-        regionSize,
-        regionSize
+    const imageData = ctx.getImageData(
+      centerX,
+      centerY,
+      centerWidth,
+      centerHeight
+    );
+    const data = imageData.data;
+
+    let veryDarkPixels = 0;
+    let veryWhitePixels = 0;
+    let coloredPixels = 0;
+    let edgeTransitions = 0;
+    let prevBrightness = 0;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const brightness = (r + g + b) / 3;
+
+      // Count very dark pixels (black border)
+      if (brightness < 50) {
+        veryDarkPixels++;
+      }
+      // Count very white pixels (white background inside)
+      if (brightness > 200) {
+        veryWhitePixels++;
+      }
+
+      // Detect colored pixels (blue/gray from diagram)
+      const colorVariance = Math.max(
+        Math.abs(r - g),
+        Math.abs(g - b),
+        Math.abs(b - r)
       );
-      const data = imageData.data;
-
-      let veryDarkPixels = 0;
-      let veryWhitePixels = 0;
-      let edgeTransitions = 0;
-      const totalPixels = data.length / 4;
-      let lastBrightness = 0;
-
-      // Análise avançada: contraste + transições de borda (padrão de marcador)
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        const brightness = (r + g + b) / 3;
-
-        // Pixels muito escuros (< 40) e muito claros (> 215)
-        if (brightness < 40) veryDarkPixels++;
-        if (brightness > 215) veryWhitePixels++;
-
-        // Contar transições bruscas (bordas do marcador)
-        if (i > 0) {
-          const diff = Math.abs(brightness - lastBrightness);
-          if (diff > 100) edgeTransitions++;
-        }
-        lastBrightness = brightness;
+      if (colorVariance > 40) {
+        coloredPixels++;
       }
 
-      const veryDarkRatio = veryDarkPixels / totalPixels;
-      const veryWhiteRatio = veryWhitePixels / totalPixels;
-      const transitionRatio = edgeTransitions / totalPixels;
-
-      // Marcador precisa ter:
-      // 1. Muito preto E muito branco (alto contraste)
-      // 2. Muitas transições de borda (padrão definido)
-      // 3. Proporções específicas
-      const hasHighContrast = veryDarkRatio > 0.3 && veryWhiteRatio > 0.3;
-      const hasPattern = transitionRatio > 0.15; // Muitas bordas
-      const hasBalance = Math.abs(veryDarkRatio - veryWhiteRatio) < 0.25; // Equilibrado
-
-      const isMarker = hasHighContrast && hasPattern && hasBalance;
-
-      // Debug (remover depois)
-      if (isMarker) {
-        console.log("🎯 Marcador detectado!", {
-          dark: veryDarkRatio.toFixed(2),
-          white: veryWhiteRatio.toFixed(2),
-          edges: transitionRatio.toFixed(2),
-        });
+      // Count edge transitions (border to white background)
+      if (i > 0 && Math.abs(brightness - prevBrightness) > 60) {
+        edgeTransitions++;
       }
-
-      return isMarker;
-    } catch (err) {
-      console.error("Erro na detecção:", err);
-      return false;
+      prevBrightness = brightness;
     }
-  };
+
+    const totalPixels = data.length / 4;
+    const darkRatio = veryDarkPixels / totalPixels;
+    const whiteRatio = veryWhitePixels / totalPixels;
+    const colorRatio = coloredPixels / totalPixels;
+    const edgeRatio = edgeTransitions / totalPixels;
+
+    // MAIS PERMISSIVO: Detecta a imagem com borda preta e centro branco
+    // Precisa ter: borda preta (15%+) E centro branco (20%+) E algumas bordas (8%+)
+    const hasBlackBorder = darkRatio > 0.15;
+    const hasWhiteCenter = whiteRatio > 0.2;
+    const hasEdges = edgeRatio > 0.08;
+    const hasColors = colorRatio > 0.05; // Diagrama colorido
+
+    const isMarkerDetected = hasBlackBorder && hasWhiteCenter && hasEdges;
+
+    // DEBUG: Atualizar valores na tela em tempo real
+    if (typeof window !== "undefined" && typeof document !== "undefined") {
+      const darkEl = document.getElementById("debug-dark");
+      const whiteEl = document.getElementById("debug-white");
+      const colorEl = document.getElementById("debug-color");
+      const edgesEl = document.getElementById("debug-edges");
+      const statusEl = document.getElementById("debug-status");
+
+      if (darkEl)
+        darkEl.textContent = `Preto: ${(darkRatio * 100).toFixed(1)}% ${
+          hasBlackBorder ? "✅" : "❌"
+        }`;
+      if (whiteEl)
+        whiteEl.textContent = `Branco: ${(whiteRatio * 100).toFixed(1)}% ${
+          hasWhiteCenter ? "✅" : "❌"
+        }`;
+      if (colorEl)
+        colorEl.textContent = `Cor: ${(colorRatio * 100).toFixed(1)}% ${
+          hasColors ? "✅" : "⚪"
+        }`;
+      if (edgesEl)
+        edgesEl.textContent = `Bordas: ${(edgeRatio * 100).toFixed(1)}% ${
+          hasEdges ? "✅" : "❌"
+        }`;
+      if (statusEl) {
+        statusEl.textContent = isMarkerDetected
+          ? "✅ DETECTADO!"
+          : "❌ Não detectado";
+        statusEl.className = isMarkerDetected
+          ? "mt-1 font-bold text-green-400"
+          : "mt-1 font-bold text-red-400";
+      }
+    }
+
+    if (isMarkerDetected) {
+      console.log("🎯 ÂNCORA DETECTADA!", {
+        dark: (darkRatio * 100).toFixed(1) + "%",
+        white: (whiteRatio * 100).toFixed(1) + "%",
+        color: (colorRatio * 100).toFixed(1) + "%",
+        edges: (edgeRatio * 100).toFixed(1) + "%",
+      });
+      return true;
+    }
+
+    return false;
+  }, []);
 
   // Inicializar câmera
   useEffect(() => {
@@ -361,7 +407,7 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
 
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
 
-        const detected = detectMarker(canvas);
+        const detected = detectMarker();
         setMarkerDetected(detected);
 
         if (moleculeGroupRef.current) {
@@ -445,11 +491,26 @@ export default function ARViewer({ pdbData }: ARViewerProps) {
           <>
             <div className="font-bold">🎯 Aponte para o marcador</div>
             <div className="text-xs text-gray-300 mt-1">
-              Use ancora.patt impresso (preto e branco)
+              Use a imagem âncora (borda preta com ATP)
             </div>
           </>
         )}
       </div>
+
+      {/* DEBUG: Mostrar valores de detecção em tempo real */}
+      <div className="absolute bottom-20 left-4 bg-black/80 text-white p-3 rounded text-xs font-mono">
+        <div className="font-bold mb-1">🔍 DEBUG Detecção:</div>
+        <div id="debug-dark">Preto: -</div>
+        <div id="debug-white">Branco: -</div>
+        <div id="debug-color">Cor: -</div>
+        <div id="debug-edges">Bordas: -</div>
+        <div id="debug-status" className="mt-1 font-bold">
+          Status: -
+        </div>
+      </div>
+
+      {/* Canvas invisível para detecção */}
+      <canvas ref={detectionCanvasRef} style={{ display: "none" }} />
     </div>
   );
 }
