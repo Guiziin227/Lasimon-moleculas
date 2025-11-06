@@ -173,8 +173,8 @@ export function ARMoleculeViewer() {
         molecule.children.length
       );
 
-      // Reduzir tamanho da molécula para não ocupar toda a tela
-      molecule.scale.set(0.08, 0.08, 0.08);
+      // AUMENTAR o tamanho da molécula para ficar visível
+      molecule.scale.set(0.3, 0.3, 0.3); // Aumentado de 0.08 para 0.3
       molecule.position.set(0, 0, 0);
 
       // Molécula começa visível (MindAR controla visibilidade automaticamente)
@@ -189,13 +189,18 @@ export function ARMoleculeViewer() {
         anchor.group.children.length
       );
 
-      // Iluminação
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+      // Iluminação FORTE para ver bem a molécula
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); // Aumentado de 0.8 para 1.2
       scene.add(ambientLight);
 
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // Aumentado de 0.6 para 1.0
       directionalLight.position.set(1, 1, 1);
       scene.add(directionalLight);
+
+      // Adicionar luz adicional de trás
+      const backLight = new THREE.DirectionalLight(0xffffff, 0.5);
+      backLight.position.set(-1, -1, -1);
+      scene.add(backLight);
 
       // Configurar eventos de detecção do marcador
       anchor.onTargetFound = () => {
@@ -210,6 +215,28 @@ export function ARMoleculeViewer() {
             "[AR] 🔍 Molécula children:",
             moleculeRef.current.children.length
           );
+          console.log(
+            "[AR] 🔍 Molécula position:",
+            moleculeRef.current.position
+          );
+          console.log("[AR] 🔍 Molécula scale:", moleculeRef.current.scale);
+          console.log("[AR] 🔍 Anchor group visible:", anchor.group.visible);
+          console.log(
+            "[AR] 🔍 Anchor group children:",
+            anchor.group.children.length
+          );
+
+          // Verificar cada átomo
+          moleculeRef.current.children.forEach((child, i) => {
+            if (i < 5) {
+              // Mostrar apenas os primeiros 5
+              console.log(`[AR] 🔍 Átomo ${i}:`, {
+                visible: child.visible,
+                type: child.type,
+                material: (child as any).material?.visible,
+              });
+            }
+          });
         }
       };
 
@@ -347,11 +374,11 @@ export function ARMoleculeViewer() {
             moleculeRef.current.rotation.y += 0.005; // Rotação automática lenta
             moleculeRef.current.rotation.y += rotationRef.current.y * 0.01;
 
-            // Aplicar escala do zoom
+            // Aplicar escala do zoom (base 0.3 agora)
             moleculeRef.current.scale.set(
-              0.08 * scaleRef.current,
-              0.08 * scaleRef.current,
-              0.08 * scaleRef.current
+              0.3 * scaleRef.current,
+              0.3 * scaleRef.current,
+              0.3 * scaleRef.current
             );
           } else {
             // Quando marcador não está visível, rotação suave automática
