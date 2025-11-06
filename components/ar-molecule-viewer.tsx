@@ -168,14 +168,26 @@ export function ARMoleculeViewer() {
       const pdbData = parsePDB(ATP_PDB_DATA);
       const molecule = createMoleculeFromPDB(pdbData, THREE);
 
+      console.log(
+        "[AR] 🧬 Molécula criada, children:",
+        molecule.children.length
+      );
+
       // Reduzir tamanho da molécula para não ocupar toda a tela
       molecule.scale.set(0.08, 0.08, 0.08);
       molecule.position.set(0, 0, 0);
 
+      // Molécula começa visível (MindAR controla visibilidade automaticamente)
+      molecule.visible = true;
+
       anchor.group.add(molecule);
       moleculeRef.current = molecule;
 
-      console.log("[AR] Molécula criada e adicionada à âncora");
+      console.log("[AR] ✅ Molécula adicionada à âncora");
+      console.log(
+        "[AR] 🎯 Âncora group children:",
+        anchor.group.children.length
+      );
 
       // Iluminação
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -190,6 +202,15 @@ export function ARMoleculeViewer() {
         console.log("[AR] 🎯 Marcador detectado!");
         markerDetectedRef.current = true;
         setStatus("found");
+
+        if (moleculeRef.current) {
+          console.log("[AR] ✅ Molécula está presente e deve aparecer");
+          console.log("[AR] 🔍 Molécula visível:", moleculeRef.current.visible);
+          console.log(
+            "[AR] 🔍 Molécula children:",
+            moleculeRef.current.children.length
+          );
+        }
       };
 
       anchor.onTargetLost = () => {
@@ -316,18 +337,26 @@ export function ARMoleculeViewer() {
       const animate = () => {
         animationIdRef.current = requestAnimationFrame(animate);
 
-        if (moleculeRef.current && markerDetectedRef.current) {
-          // Aplicar rotação manual do usuário
-          moleculeRef.current.rotation.x = rotationRef.current.x;
-          moleculeRef.current.rotation.y += 0.005; // Rotação automática lenta
-          moleculeRef.current.rotation.y += rotationRef.current.y * 0.01;
+        if (moleculeRef.current) {
+          // Sempre animar a molécula quando ela existir
+          // MindAR já controla a visibilidade baseado no marcador
 
-          // Aplicar escala do zoom
-          moleculeRef.current.scale.set(
-            0.08 * scaleRef.current,
-            0.08 * scaleRef.current,
-            0.08 * scaleRef.current
-          );
+          // Aplicar rotação manual do usuário se marcador detectado
+          if (markerDetectedRef.current) {
+            moleculeRef.current.rotation.x = rotationRef.current.x;
+            moleculeRef.current.rotation.y += 0.005; // Rotação automática lenta
+            moleculeRef.current.rotation.y += rotationRef.current.y * 0.01;
+
+            // Aplicar escala do zoom
+            moleculeRef.current.scale.set(
+              0.08 * scaleRef.current,
+              0.08 * scaleRef.current,
+              0.08 * scaleRef.current
+            );
+          } else {
+            // Quando marcador não está visível, rotação suave automática
+            moleculeRef.current.rotation.y += 0.005;
+          }
         }
       };
       animate();
