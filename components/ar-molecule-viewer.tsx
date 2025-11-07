@@ -123,36 +123,36 @@ export function ARMoleculeViewer() {
       setStatus("loading");
       console.log("[AR] 🎬 Criando instância do MindAR...");
 
-      // Verificar se o arquivo marker.mind existe
+      // Verificar se o arquivo target.mind existe
       try {
-        const response = await fetch("/marker.mind");
+        const response = await fetch("/target.mind");
         if (!response.ok) {
           throw new Error(
-            `Arquivo marker.mind não encontrado (HTTP ${response.status})`
+            `Arquivo target.mind não encontrado (HTTP ${response.status})`
           );
         }
         const blob = await response.blob();
         console.log(
-          "[AR] ✅ Arquivo marker.mind encontrado, tamanho:",
+          "[AR] ✅ Arquivo target.mind encontrado, tamanho:",
           blob.size,
           "bytes"
         );
 
         if (blob.size < 100) {
-          throw new Error("Arquivo marker.mind muito pequeno ou corrompido");
+          throw new Error("Arquivo target.mind muito pequeno ou corrompido");
         }
       } catch (error) {
-        console.error("[AR] ❌ Erro ao verificar marker.mind:", error);
+        console.error("[AR] ❌ Erro ao verificar target.mind:", error);
         throw new Error(
-          "Arquivo marker.mind não encontrado ou inacessível. " +
-            "Certifique-se de que o arquivo está em public/marker.mind"
+          "Arquivo target.mind não encontrado ou inacessível. " +
+            "Certifique-se de que o arquivo está em public/target.mind"
         );
       }
 
       // Inicializar MindAR com configuração
       const mindarThree = new MindARThreeRef.current({
         container: containerRef.current,
-        imageTargetSrc: "/marker.mind",
+        imageTargetSrc: "/target.mind",
       });
 
       console.log("[AR] ✅ Instância MindAR criada");
@@ -212,17 +212,6 @@ export function ARMoleculeViewer() {
 
       anchor.group.add(molecule);
       moleculeRef.current = molecule;
-
-      // TESTE: Adicionar um cubo vermelho GRANDE para verificar renderização
-      const testCube = new threeLib.Mesh(
-        new threeLib.BoxGeometry(0.3, 0.3, 0.3),
-        new threeLib.MeshBasicMaterial({ color: 0xff0000, wireframe: false })
-      );
-      testCube.position.set(0, 0.5, 0); // Acima da molécula
-      anchor.group.add(testCube);
-      console.log(
-        "[AR] 🟥 Cubo de teste VERMELHO adicionado acima da molécula"
-      );
 
       console.log("[AR] ✅ Molécula adicionada à âncora");
       console.log(
@@ -662,15 +651,16 @@ export function ARMoleculeViewer() {
               disabled={!mindARLoaded}
               className="w-full bg-white text-blue-900 hover:bg-white/90 font-semibold mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {mindARLoaded ? "📷 Iniciar AR" : "⏳ Aguardando MindAR..."}
+              {mindARLoaded ? "Iniciar AR" : "Aguardando MindAR..."}
+              {mindARLoaded ? "Iniciar AR" : "Aguardando MindAR..."}
             </Button>
 
             <a
-              href="/marker-image.jpg"
+              href="/target.jpg"
               download
               className="text-white/80 text-sm underline hover:text-white"
             >
-              📥 Baixar marcador para impressão
+              Baixar marcador para impressão
             </a>
           </div>
         </div>
