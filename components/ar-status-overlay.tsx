@@ -70,12 +70,11 @@ export function ARStatusOverlay({
 
       {/* Instructions */}
       {status === "found" && (
-        <div className="absolute bottom-4 left-4 right-4 pointer-events-none z-10">
-          <div className="bg-black/70 backdrop-blur-sm rounded-lg p-3 text-white text-sm max-w-md mx-auto">
-            <p className="font-semibold mb-2">Controles:</p>
-            <p className="text-white/80 text-xs">
-              - 1 dedo: Girar molécula
-              <br />- 2 dedos (pinça): Zoom in/out
+        <div className="absolute top-20 left-4 right-4 pointer-events-none z-10">
+          <div className="bg-black/70 backdrop-blur-sm rounded-lg p-2.5 text-white text-sm max-w-xs mx-auto">
+            <p className="font-semibold mb-1 text-xs">Controles:</p>
+            <p className="text-white/80 text-xs leading-relaxed">
+              1 dedo: Girar • 2 dedos(pinça): Zoom
             </p>
           </div>
         </div>
