@@ -1,3 +1,4 @@
+import { useIsMobile } from "@/hooks/use-mobile";
 import { ATP_PDB_DATA } from "@/lib/atp-data";
 import { createMoleculeFromPDB, parsePDB } from "@/lib/pdb-parser";
 import { useEffect, useRef } from "react";
@@ -27,6 +28,12 @@ export function ARMoleculeRenderer({
   onStatusChange,
   onError,
 }: ARMoleculeRendererProps) {
+  const isMobile = useIsMobile();
+  const baseScale = isMobile ? 0.12 : 0.2;
+  const rotationSensitivity = isMobile ? 0.006 : 0.004;
+  const minScaleFactor = isMobile ? 0.6 : 0.5;
+  const maxScaleFactor = isMobile ? 1.8 : 3;
+
   const sceneRef = useRef<Scene | null>(null);
   const cameraRef = useRef<Camera | null>(null);
   const rendererRef = useRef<WebGLRenderer | null>(null);
@@ -194,7 +201,10 @@ export function ARMoleculeRenderer({
       console.log("[AR] Molécula criada, children:", molecule.children.length);
 
       // Ajustar tamanho da molécula para visualização em AR
-      molecule.scale.set(0.2, 0.2, 0.2);
+      rotationRef.current = { x: 0, y: 0 };
+      scaleRef.current = 1;
+
+      molecule.scale.set(baseScale, baseScale, baseScale);
       molecule.position.set(0, 0, 0);
 
       // Molécula começa visível (MindAR controla visibilidade automaticamente)
@@ -368,7 +378,22 @@ export function ARMoleculeRenderer({
 
           // Rotacionar molécula quando marcador detectado
           if (moleculeRef.current && markerDetectedRef.current) {
-            moleculeRef.current.rotation.y += 0.01;
+            if (!touchStartRef.current) {
+              rotationRef.current.y += 0.0;
+            }
+
+            const molecule = moleculeRef.current;
+            const targetScale = baseScale * scaleRef.current;
+
+            if (rotationRef.current.y > Math.PI * 2) {
+              rotationRef.current.y -= Math.PI * 2;
+            } else if (rotationRef.current.y < -Math.PI * 2) {
+              rotationRef.current.y += Math.PI * 2;
+            }
+
+            molecule.rotation.x = rotationRef.current.x;
+            molecule.rotation.y = rotationRef.current.y;
+            molecule.scale.set(targetScale, targetScale, targetScale);
           }
 
           // Renderizar usando MindAR
@@ -400,16 +425,7 @@ export function ARMoleculeRenderer({
             error.message?.includes("Device in use") ||
             error.message?.includes("allocate videosource")
           ) {
-            throw new Error(
-              "CÂMERA EM USO!\n\n" +
-                "A câmera está sendo usada por outro aplicativo.\n\n" +
-                "SOLUÇÕES:\n" +
-                "1. Feche outras abas do navegador usando a câmera\n" +
-                "2. Feche apps como Zoom, Teams, Skype, Discord\n" +
-                "3. Feche o navegador completamente e reabra\n" +
-                "4. Se persistir, reinicie o computador\n\n" +
-                "Apenas um aplicativo pode usar a câmera por vez"
-            );
+            throw new Error("CÂMERA EM USO!\n\n");
           }
 
           if (error.message) {
@@ -417,17 +433,7 @@ export function ARMoleculeRenderer({
           }
         }
 
-        throw new Error(
-          "ERRO: O arquivo targets.mind está corrompido ou inválido!\n\n" +
-            "SOLUÇÃO:\n" +
-            "1. Acesse: https://hiukim.github.io/mind-ar-js-doc/tools/compile\n" +
-            "2. Faça upload da sua imagem marcadora\n" +
-            "3. Clique em 'Start' para compilar\n" +
-            "4. Baixe o arquivo 'targets.mind'\n" +
-            "5. Renomeie o arquivo para 'targets.mind' se necessário\n" +
-            "6. Substitua o arquivo em public/targets.mind\n\n" +
-            "A imagem deve ter bom contraste e detalhes distintos."
-        );
+        throw new Error("ERRO RECARREGUE A PÁGINA!\n\n");
       }
 
       // Event listeners para interações touch no canvas
@@ -462,8 +468,8 @@ export function ARMoleculeRenderer({
           const deltaX = e.touches[0].clientX - touchStartRef.current.x;
           const deltaY = e.touches[0].clientY - touchStartRef.current.y;
 
-          rotationRef.current.y += deltaX * 0.01;
-          rotationRef.current.x += deltaY * 0.01;
+          rotationRef.current.y += deltaX * rotationSensitivity;
+          rotationRef.current.x += deltaY * rotationSensitivity;
 
           rotationRef.current.x = Math.max(
             -Math.PI / 2,
@@ -477,10 +483,18 @@ export function ARMoleculeRenderer({
           const dy = e.touches[0].clientY - e.touches[1].clientY;
           const distance = Math.sqrt(dx * dx + dy * dy);
 
+          if (!touchStartRef.current.distance) {
+            touchStartRef.current.distance = distance;
+            return;
+          }
+
           const scale = distance / touchStartRef.current.distance;
           scaleRef.current *= scale;
 
-          scaleRef.current = Math.max(0.5, Math.min(3, scaleRef.current));
+          scaleRef.current = Math.max(
+            minScaleFactor,
+            Math.min(maxScaleFactor, scaleRef.current)
+          );
 
           touchStartRef.current.distance = distance;
         }
@@ -497,6 +511,7 @@ export function ARMoleculeRenderer({
         passive: false,
       });
       canvas.addEventListener("touchend", handleTouchEnd);
+      canvas.addEventListener("touchcancel", handleTouchEnd);
     } catch (err) {
       console.error("[AR] Erro ao inicializar AR:", err);
       onError(`Erro: ${err instanceof Error ? err.message : String(err)}`);
