@@ -39,7 +39,7 @@ export function ARMoleculeViewer() {
   useEffect(() => {
     const loadMindAR = async () => {
       try {
-        console.log("[AR] 📦 Carregando MindAR via import map...");
+        console.log("[AR] Carregando MindAR via import map...");
 
         // Usar eval para importar do import map (workaround para Next.js)
         const module = await eval('import("mindar-image-three")');
@@ -49,9 +49,9 @@ export function ARMoleculeViewer() {
         threeLibRef.current = threeModule;
 
         setMindARLoaded(true);
-        console.log("[AR] ✅ MindAR carregado com sucesso!");
+        console.log("[AR] MindAR carregado com sucesso!");
       } catch (error) {
-        console.error("[AR] ❌ Erro ao carregar MindAR:", error);
+        console.error("[AR] Erro ao carregar MindAR:", error);
         setErrorMessage("Erro ao carregar MindAR. Verifique sua conexão.");
       }
     };
@@ -60,7 +60,7 @@ export function ARMoleculeViewer() {
   }, []);
 
   const stopAR = () => {
-    console.log("[AR] 🛑 Parando AR...");
+    console.log("[AR] Parando AR...");
 
     // Parar animação
     if (animationIdRef.current) {
@@ -72,9 +72,9 @@ export function ARMoleculeViewer() {
     if (mindARRef.current) {
       try {
         mindARRef.current.stop();
-        console.log("[AR] ✅ MindAR parado");
+        console.log("[AR] MindAR parado");
       } catch (error) {
-        console.error("[AR] ⚠️ Erro ao parar MindAR:", error);
+        console.error("[AR] Erro ao parar MindAR:", error);
       }
     }
 
@@ -86,7 +86,7 @@ export function ARMoleculeViewer() {
           const stream = video.srcObject as MediaStream;
           stream.getTracks().forEach((track) => {
             track.stop();
-            console.log("[AR] 📹 Câmera liberada:", track.label);
+            console.log("[AR] Câmera liberada:", track.label);
           });
           video.srcObject = null;
         }
@@ -99,66 +99,66 @@ export function ARMoleculeViewer() {
     }
 
     setStatus("idle");
-    console.log("[AR] ✅ AR parado e câmera liberada!");
+    console.log("[AR] AR parado e câmera liberada!");
   };
 
   const startAR = async () => {
     try {
       setStatus("requesting-camera");
-      console.log("[AR] 📱 Iniciando processo de AR...");
+      console.log("[AR] Iniciando processo de AR...");
 
       if (!containerRef.current) {
         throw new Error("Container não encontrado");
       }
 
       if (!MindARThreeRef.current) {
-        console.error("[AR] ❌ MindAR não está carregado");
+        console.error("[AR] MindAR não está carregado");
         throw new Error(
           "MindAR ainda não foi carregado. Aguarde alguns segundos e tente novamente."
         );
       }
 
-      console.log("[AR] ✅ MindAR disponível, iniciando configuração...");
+      console.log("[AR] MindAR disponível, iniciando configuração...");
 
       setStatus("loading");
-      console.log("[AR] 🎬 Criando instância do MindAR...");
+      console.log("[AR] Criando instância do MindAR...");
 
-      // Verificar se o arquivo target.mind existe
+      // Verificar se o arquivo targets.mind existe
       try {
-        const response = await fetch("/target.mind");
+        const response = await fetch("/targets.mind");
         if (!response.ok) {
           throw new Error(
-            `Arquivo target.mind não encontrado (HTTP ${response.status})`
+            `Arquivo targets.mind não encontrado (HTTP ${response.status})`
           );
         }
         const blob = await response.blob();
         console.log(
-          "[AR] ✅ Arquivo target.mind encontrado, tamanho:",
+          "[AR] Arquivo targets.mind encontrado, tamanho:",
           blob.size,
           "bytes"
         );
 
         if (blob.size < 100) {
-          throw new Error("Arquivo target.mind muito pequeno ou corrompido");
+          throw new Error("Arquivo targets.mind muito pequeno ou corrompido");
         }
       } catch (error) {
-        console.error("[AR] ❌ Erro ao verificar target.mind:", error);
+        console.error("[AR] Erro ao verificar targets.mind:", error);
         throw new Error(
-          "Arquivo target.mind não encontrado ou inacessível. " +
-            "Certifique-se de que o arquivo está em public/target.mind"
+          "Arquivo targets.mind não encontrado ou inacessível. " +
+            "Certifique-se de que o arquivo está em public/targets.mind"
         );
       }
 
       // Inicializar MindAR com configuração
       const mindarThree = new MindARThreeRef.current({
         container: containerRef.current,
-        imageTargetSrc: "/target.mind",
+        imageTargetSrc: "/targets.mind",
       });
 
-      console.log("[AR] ✅ Instância MindAR criada");
+      console.log("[AR] Instância MindAR criada");
 
       mindARRef.current = mindarThree;
-      console.log("[AR] 🎯 MindAR inicializado");
+      console.log("[AR] MindAR inicializado");
 
       const { renderer, scene, camera } = mindarThree;
       rendererRef.current = renderer;
@@ -173,30 +173,24 @@ export function ARMoleculeViewer() {
         );
       }
 
-      console.log("[AR] ℹ️ Three.js revision:", threeLib.REVISION);
+      console.log("[AR] Three.js revision:", threeLib.REVISION);
 
-      console.log("[AR] 🎬 Renderer, Scene e Camera configurados");
+      console.log("[AR] Renderer, Scene e Camera configurados");
 
       // Criar âncora para a molécula
       const anchor = mindarThree.addAnchor(0);
       anchorRef.current = anchor;
 
-      console.log(
-        "[AR] 🎯 Âncora criada, group.visible:",
-        anchor.group.visible
-      );
+      console.log("[AR] Âncora criada, group.visible:", anchor.group.visible);
 
       // Criar molécula
       const pdbData = parsePDB(ATP_PDB_DATA);
       const molecule = createMoleculeFromPDB(pdbData, threeLib);
 
-      console.log(
-        "[AR] 🧬 Molécula criada, children:",
-        molecule.children.length
-      );
+      console.log("[AR] Molécula criada, children:", molecule.children.length);
 
-      // AUMENTAR o tamanho da molécula para ficar visível
-      molecule.scale.set(0.5, 0.5, 0.5); // MUITO GRANDE para garantir visibilidade
+      // Ajustar tamanho da molécula para visualização em AR
+      molecule.scale.set(0.2, 0.2, 0.2);
       molecule.position.set(0, 0, 0);
 
       // Molécula começa visível (MindAR controla visibilidade automaticamente)
@@ -213,13 +207,10 @@ export function ARMoleculeViewer() {
       anchor.group.add(molecule);
       moleculeRef.current = molecule;
 
-      console.log("[AR] ✅ Molécula adicionada à âncora");
+      console.log("[AR] Molécula adicionada à âncora");
+      console.log("[AR] Âncora group children:", anchor.group.children.length);
       console.log(
-        "[AR] 🎯 Âncora group children:",
-        anchor.group.children.length
-      );
-      console.log(
-        "[AR] 🎯 Âncora group.visible após adicionar molécula:",
+        "[AR] Âncora group.visible após adicionar molécula:",
         anchor.group.visible
       );
 
@@ -238,44 +229,38 @@ export function ARMoleculeViewer() {
 
       // Configurar eventos de detecção do marcador
       anchor.onTargetFound = () => {
-        console.log("[AR] 🎯 Marcador detectado!");
+        console.log("[AR] Marcador detectado!");
         markerDetectedRef.current = true;
         setStatus("found");
 
         if (moleculeRef.current) {
-          console.log("[AR] ✅ Molécula está presente e deve aparecer");
-          console.log("[AR] 🔍 Molécula visível:", moleculeRef.current.visible);
+          console.log("[AR] Molécula está presente e deve aparecer");
+          console.log("[AR] Molécula visível:", moleculeRef.current.visible);
           console.log(
-            "[AR] 🔍 Molécula children:",
+            "[AR] Molécula children:",
             moleculeRef.current.children.length
           );
+          console.log("[AR] Molécula position:", moleculeRef.current.position);
+          console.log("[AR] Molécula scale:", moleculeRef.current.scale);
+          console.log("[AR] Anchor group visible:", anchor.group.visible);
           console.log(
-            "[AR] 🔍 Molécula position:",
-            moleculeRef.current.position
-          );
-          console.log("[AR] 🔍 Molécula scale:", moleculeRef.current.scale);
-          console.log("[AR] 🔍 Anchor group visible:", anchor.group.visible);
-          console.log(
-            "[AR] 🔍 Anchor group children:",
+            "[AR] Anchor group children:",
             anchor.group.children.length
           );
-          console.log("[AR] 🔍 Anchor group position:", anchor.group.position);
-          console.log("[AR] 🔍 Anchor group matrix:", anchor.group.matrix);
+          console.log("[AR] Anchor group position:", anchor.group.position);
+          console.log("[AR] Anchor group matrix:", anchor.group.matrix);
 
           // Verificar câmera
           if (cameraRef.current) {
-            console.log("[AR] 📷 Camera position:", cameraRef.current.position);
-            console.log("[AR] 📷 Camera rotation:", cameraRef.current.rotation);
+            console.log("[AR] Camera position:", cameraRef.current.position);
+            console.log("[AR] Camera rotation:", cameraRef.current.rotation);
           }
 
           // Verificar renderizador
           if (rendererRef.current) {
+            console.log("[AR] Renderer info:", rendererRef.current.info.render);
             console.log(
-              "[AR] 🎨 Renderer info:",
-              rendererRef.current.info.render
-            );
-            console.log(
-              "[AR] 🎨 Renderer autoClear:",
+              "[AR] Renderer autoClear:",
               rendererRef.current.autoClear
             );
           }
@@ -284,7 +269,7 @@ export function ARMoleculeViewer() {
           moleculeRef.current.children.forEach((child, i) => {
             if (i < 5) {
               // Mostrar apenas os primeiros 5
-              console.log(`[AR] 🔍 Átomo ${i}:`, {
+              console.log(`[AR] Átomo ${i}:`, {
                 visible: child.visible,
                 type: child.type,
                 material: (child as any).material?.visible,
@@ -295,21 +280,21 @@ export function ARMoleculeViewer() {
       };
 
       anchor.onTargetLost = () => {
-        console.log("[AR] ❌ Marcador perdido");
+        console.log("[AR] Marcador perdido");
         markerDetectedRef.current = false;
         setStatus("scanning");
       };
 
       setStatus("scanning");
-      console.log("[AR] 🔍 Iniciando detecção de marcador...");
+      console.log("[AR] Iniciando detecção de marcador...");
 
       // Iniciar MindAR
       try {
-        console.log("[AR] 📹 Chamando mindarThree.start()...");
-        console.log("[AR] 🎯 Arquivo de marcador:", "/marker.mind");
+        console.log("[AR] Chamando mindarThree.start()...");
+        console.log("[AR] Arquivo de marcador:", "/targets.mind");
 
         await mindarThree.start().catch((err: any) => {
-          console.error("[AR] ❌❌ Erro interno do mindarThree.start():", err);
+          console.error("[AR] Erro interno do mindarThree.start():", err);
           console.error("[AR] Tipo do erro:", typeof err);
           console.error("[AR] Nome do erro:", err?.name);
           console.error("[AR] Mensagem do erro:", err?.message);
@@ -328,24 +313,24 @@ export function ARMoleculeViewer() {
         });
 
         console.log(
-          "[AR] ✅ MindAR.start() completou - câmera ativa e pronto para detectar marcador"
+          "[AR] MindAR.start() completou - câmera ativa e pronta para detectar marcador"
         );
 
         // Verificar se o canvas foi criado
         const canvas = renderer.domElement;
-        console.log("[AR] 📺 Canvas criado:", canvas.width, "x", canvas.height);
-        console.log("[AR] 📺 Canvas parent:", canvas.parentElement);
+        console.log("[AR] Canvas criado:", canvas.width, "x", canvas.height);
+        console.log("[AR] Canvas parent:", canvas.parentElement);
 
         // Verificar se há vídeo
         const video = containerRef.current?.querySelector("video");
         if (video) {
           console.log(
-            "[AR] 📹 Elemento de vídeo encontrado:",
+            "[AR] Elemento de vídeo encontrado:",
             video.videoWidth,
             "x",
             video.videoHeight
           );
-          console.log("[AR] 📹 Vídeo está tocando:", !video.paused);
+          console.log("[AR] Vídeo está tocando:", !video.paused);
 
           // Forçar vídeo a ficar visível e atrás do canvas
           video.style.position = "absolute";
@@ -356,9 +341,9 @@ export function ARMoleculeViewer() {
           video.style.objectFit = "cover";
           video.style.zIndex = "1";
 
-          console.log("[AR] 🎨 Estilos de vídeo aplicados");
+          console.log("[AR] Estilos de vídeo aplicados");
         } else {
-          console.warn("[AR] ⚠️ Nenhum elemento de vídeo encontrado!");
+          console.warn("[AR] Nenhum elemento de vídeo encontrado!");
         }
 
         // Garantir que o canvas fique transparente por cima do vídeo
@@ -369,12 +354,12 @@ export function ARMoleculeViewer() {
         canvas.style.height = "100%";
         canvas.style.zIndex = "10";
 
-        console.log("[AR] 🎨 Estilos de canvas aplicados");
+        console.log("[AR] Estilos de canvas aplicados");
 
-        console.log("[AR] ✅ Inicialização completa!");
+        console.log("[AR] Inicialização completa!");
 
         // CRÍTICO: Iniciar o loop de renderização do MindAR manualmente
-        console.log("[AR] 🎬 Iniciando loop de renderização MindAR...");
+        console.log("[AR] Iniciando loop de renderização MindAR...");
 
         const renderLoop = () => {
           animationIdRef.current = requestAnimationFrame(renderLoop);
@@ -389,18 +374,18 @@ export function ARMoleculeViewer() {
         };
 
         renderLoop();
-        console.log("[AR] ✅ Loop de renderização ativo!");
+        console.log("[AR] Loop de renderização ativo!");
       } catch (error) {
-        console.error("[AR] ❌ Erro ao iniciar MindAR:", error);
+        console.error("[AR] Erro ao iniciar MindAR:", error);
 
         // Verificar se é erro de câmera
         if (error instanceof Error) {
           // Erro de permissão negada
           if (error.name === "NotAllowedError") {
             throw new Error(
-              "❌ PERMISSÃO NEGADA!\n\n" +
-                "🔒 A câmera foi bloqueada.\n\n" +
-                "📋 SOLUÇÃO:\n" +
+              "PERMISSÃO NEGADA!\n\n" +
+                "A câmera foi bloqueada.\n\n" +
+                "SOLUÇÃO:\n" +
                 "1. Clique no ícone de cadeado/câmera na barra de endereço\n" +
                 "2. Selecione 'Permitir' para câmera\n" +
                 "3. Recarregue a página"
@@ -414,14 +399,14 @@ export function ARMoleculeViewer() {
             error.message?.includes("allocate videosource")
           ) {
             throw new Error(
-              "🎥 CÂMERA EM USO!\n\n" +
-                "❌ A câmera está sendo usada por outro aplicativo.\n\n" +
-                "📋 SOLUÇÕES:\n" +
+              "CÂMERA EM USO!\n\n" +
+                "A câmera está sendo usada por outro aplicativo.\n\n" +
+                "SOLUÇÕES:\n" +
                 "1. Feche outras abas do navegador usando a câmera\n" +
                 "2. Feche apps como Zoom, Teams, Skype, Discord\n" +
                 "3. Feche o navegador completamente e reabra\n" +
                 "4. Se persistir, reinicie o computador\n\n" +
-                "💡 Apenas um app pode usar a câmera por vez!"
+                "Apenas um aplicativo pode usar a câmera por vez"
             );
           }
 
@@ -431,15 +416,15 @@ export function ARMoleculeViewer() {
         }
 
         throw new Error(
-          "❌ ERRO: O arquivo marker.mind está corrompido ou inválido!\n\n" +
-            "📋 SOLUÇÃO:\n" +
+          "ERRO: O arquivo targets.mind está corrompido ou inválido!\n\n" +
+            "SOLUÇÃO:\n" +
             "1. Acesse: https://hiukim.github.io/mind-ar-js-doc/tools/compile\n" +
             "2. Faça upload da sua imagem marcadora\n" +
             "3. Clique em 'Start' para compilar\n" +
             "4. Baixe o arquivo 'targets.mind'\n" +
-            "5. Renomeie para 'marker.mind'\n" +
-            "6. Substitua o arquivo em public/marker.mind\n\n" +
-            "💡 A imagem deve ter bom contraste e detalhes distintos."
+            "5. Renomeie o arquivo para 'targets.mind' se necessário\n" +
+            "6. Substitua o arquivo em public/targets.mind\n\n" +
+            "A imagem deve ter bom contraste e detalhes distintos."
         );
       }
 
@@ -540,20 +525,20 @@ export function ARMoleculeViewer() {
   useEffect(() => {
     return () => {
       // Cleanup completo para liberar a câmera
-      console.log("[AR] 🧹 Limpando recursos...");
+      console.log("[AR] Limpando recursos...");
 
       if (animationIdRef.current) {
         cancelAnimationFrame(animationIdRef.current);
         animationIdRef.current = null;
-        console.log("[AR] ✅ Animação cancelada");
+        console.log("[AR] Animação cancelada");
       }
 
       if (mindARRef.current) {
         try {
           mindARRef.current.stop();
-          console.log("[AR] ✅ MindAR parado");
+          console.log("[AR] MindAR parado");
         } catch (error) {
-          console.error("[AR] ⚠️ Erro ao parar MindAR:", error);
+          console.error("[AR] Erro ao parar MindAR:", error);
         }
         mindARRef.current = null;
       }
@@ -563,7 +548,7 @@ export function ARMoleculeViewer() {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach((track) => {
           track.stop();
-          console.log("[AR] 📹 Track de vídeo parada:", track.kind);
+          console.log("[AR] Track de vídeo parada:", track.kind);
         });
         videoRef.current.srcObject = null;
       }
@@ -576,7 +561,7 @@ export function ARMoleculeViewer() {
             const stream = video.srcObject as MediaStream;
             stream.getTracks().forEach((track) => {
               track.stop();
-              console.log("[AR] 📹 Track adicional parada:", track.kind);
+              console.log("[AR] Track adicional parada:", track.kind);
             });
             video.srcObject = null;
           }
@@ -586,10 +571,10 @@ export function ARMoleculeViewer() {
       if (rendererRef.current) {
         rendererRef.current.dispose();
         rendererRef.current = null;
-        console.log("[AR] ✅ Renderer descartado");
+        console.log("[AR] Renderer descartado");
       }
 
-      console.log("[AR] 🧹 Limpeza completa!");
+      console.log("[AR] Limpeza completa!");
     };
   }, []);
 
@@ -604,7 +589,6 @@ export function ARMoleculeViewer() {
         <div className="absolute inset-0 flex items-center justify-center bg-linear-to-br from-blue-900 to-purple-900 p-4">
           <div className="text-center max-w-md">
             <div className="mb-6">
-              <div className="text-6xl mb-4">🧬</div>
               <h1 className="text-3xl font-bold text-white mb-2">
                 Visualizador Molecular AR
               </h1>
@@ -614,7 +598,7 @@ export function ARMoleculeViewer() {
             </div>
 
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-6 text-white text-sm text-left">
-              <p className="font-semibold mb-2">📋 Instruções:</p>
+              <p className="font-semibold mb-2">Instruções:</p>
               <ol className="space-y-1 text-white/80">
                 <li>1. Clique em "Iniciar AR" abaixo</li>
                 <li>2. Permita o acesso à câmera</li>
@@ -637,11 +621,8 @@ export function ARMoleculeViewer() {
             )}
 
             {mindARLoaded && (
-              <div className="bg-green-500/20 backdrop-blur-sm rounded-lg p-3 mb-4 text-green-200 text-sm">
-                <div className="flex items-center justify-center gap-2">
-                  <span>✅</span>
-                  <span>MindAR pronto!</span>
-                </div>
+              <div className="bg-green-500/20 backdrop-blur-sm rounded-lg p-3 mb-4 text-green-200 text-sm text-center">
+                MindAR pronto!
               </div>
             )}
 
@@ -652,11 +633,10 @@ export function ARMoleculeViewer() {
               className="w-full bg-white text-blue-900 hover:bg-white/90 font-semibold mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {mindARLoaded ? "Iniciar AR" : "Aguardando MindAR..."}
-              {mindARLoaded ? "Iniciar AR" : "Aguardando MindAR..."}
             </Button>
 
             <a
-              href="/target.jpg"
+              href="/LOGO.png"
               download
               className="text-white/80 text-sm underline hover:text-white"
             >
@@ -686,7 +666,7 @@ export function ARMoleculeViewer() {
             )}
             {status === "scanning" && (
               <div>
-                <p className="font-semibold">🔍 Procurando marcador...</p>
+                <p className="font-semibold">Procurando marcador...</p>
                 <p className="text-sm text-white/80 mt-1">
                   Aponte a câmera para o marcador impresso
                 </p>
@@ -694,7 +674,7 @@ export function ARMoleculeViewer() {
             )}
             {status === "found" && (
               <div>
-                <p className="font-semibold">✨ Molécula de ATP</p>
+                <p className="font-semibold">Molécula de ATP</p>
                 <p className="text-sm text-white/80 mt-1">
                   Adenosina Trifosfato
                 </p>
@@ -707,19 +687,19 @@ export function ARMoleculeViewer() {
       {status === "error" && (
         <div className="absolute top-0 left-0 right-0 z-20">
           <div className="bg-red-600/90 backdrop-blur-sm text-white px-4 py-3">
-            <p className="font-semibold">❌ Erro</p>
+            <p className="font-semibold">Erro</p>
             <p className="text-sm mt-1 whitespace-pre-line">{errorMessage}</p>
           </div>
         </div>
-      )}{" "}
+      )}
       {/* Instructions */}
       {status === "found" && (
         <div className="absolute bottom-4 left-4 right-4 pointer-events-none z-10">
           <div className="bg-black/70 backdrop-blur-sm rounded-lg p-3 text-white text-sm max-w-md mx-auto">
-            <p className="font-semibold mb-2">💡 Controles:</p>
+            <p className="font-semibold mb-2">Controles:</p>
             <p className="text-white/80 text-xs">
-              • 1 dedo: Girar molécula
-              <br />• 2 dedos (pinça): Zoom in/out
+              - 1 dedo: Girar molécula
+              <br />- 2 dedos (pinça): Zoom in/out
             </p>
           </div>
         </div>

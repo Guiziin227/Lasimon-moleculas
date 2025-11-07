@@ -21,22 +21,22 @@ export function MindARScriptLoader() {
     script.async = true;
 
     script.onload = () => {
-      console.log("[MindAR] ✅ Script carregado com sucesso via CDN");
+      console.log("[MindAR] Script carregado com sucesso via CDN");
       // Aguardar um pouco para o MindAR estar disponível
       setTimeout(() => {
         // @ts-ignore
         if (window.MINDAR) {
-          console.log("[MindAR] ✅ Biblioteca disponível globalmente");
+          console.log("[MindAR] Biblioteca disponível globalmente");
         } else {
           console.warn(
-            "[MindAR] ⚠️ Script carregou mas MINDAR não está no window"
+            "[MindAR] Script carregou mas MINDAR não está no window"
           );
         }
       }, 100);
     };
 
     script.onerror = () => {
-      console.error("[MindAR] ❌ Erro ao carregar script do CDN");
+      console.error("[MindAR] Erro ao carregar script do CDN");
     };
 
     document.head.appendChild(script);
