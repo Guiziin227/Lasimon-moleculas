@@ -3,9 +3,11 @@
 import { ATP_PDB_DATA } from "@/lib/atp-data";
 import { createMoleculeFromPDB, parsePDB } from "@/lib/pdb-parser";
 import { useEffect, useRef, useState } from "react";
+import type { Camera, Group, Scene, WebGLRenderer } from "three";
 
-import * as THREE from "three";
 import { Button } from "./ui/Button";
+
+type ThreeLib = typeof import("three");
 
 export function ARMoleculeViewer() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -14,10 +16,10 @@ export function ARMoleculeViewer() {
   >("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [mindARLoaded, setMindARLoaded] = useState(false);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.Camera | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const moleculeRef = useRef<THREE.Group | null>(null);
+  const sceneRef = useRef<Scene | null>(null);
+  const cameraRef = useRef<Camera | null>(null);
+  const rendererRef = useRef<WebGLRenderer | null>(null);
+  const moleculeRef = useRef<Group | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationIdRef = useRef<number | null>(null);
   const touchStartRef = useRef<{
@@ -31,6 +33,7 @@ export function ARMoleculeViewer() {
   const mindARRef = useRef<any>(null);
   const anchorRef = useRef<any>(null);
   const MindARThreeRef = useRef<any>(null);
+  const threeLibRef = useRef<ThreeLib | null>(null);
 
   // Carregar MindAR dinamicamente
   useEffect(() => {
@@ -40,7 +43,11 @@ export function ARMoleculeViewer() {
 
         // Usar eval para importar do import map (workaround para Next.js)
         const module = await eval('import("mindar-image-three")');
+        const threeModule = (await eval('import("three")')) as ThreeLib;
+
         MindARThreeRef.current = module.MindARThree;
+        threeLibRef.current = threeModule;
+
         setMindARLoaded(true);
         console.log("[AR] ✅ MindAR carregado com sucesso!");
       } catch (error) {
@@ -158,15 +165,30 @@ export function ARMoleculeViewer() {
       sceneRef.current = scene;
       cameraRef.current = camera;
 
+      const threeLib = threeLibRef.current;
+
+      if (!threeLib) {
+        throw new Error(
+          "Three.js não foi carregado via import map. Recarregue a página e tente novamente."
+        );
+      }
+
+      console.log("[AR] ℹ️ Three.js revision:", threeLib.REVISION);
+
       console.log("[AR] 🎬 Renderer, Scene e Camera configurados");
 
       // Criar âncora para a molécula
       const anchor = mindarThree.addAnchor(0);
       anchorRef.current = anchor;
 
+      console.log(
+        "[AR] 🎯 Âncora criada, group.visible:",
+        anchor.group.visible
+      );
+
       // Criar molécula
       const pdbData = parsePDB(ATP_PDB_DATA);
-      const molecule = createMoleculeFromPDB(pdbData, THREE);
+      const molecule = createMoleculeFromPDB(pdbData, threeLib);
 
       console.log(
         "[AR] 🧬 Molécula criada, children:",
@@ -174,31 +196,54 @@ export function ARMoleculeViewer() {
       );
 
       // AUMENTAR o tamanho da molécula para ficar visível
-      molecule.scale.set(0.3, 0.3, 0.3); // Aumentado de 0.08 para 0.3
+      molecule.scale.set(0.5, 0.5, 0.5); // MUITO GRANDE para garantir visibilidade
       molecule.position.set(0, 0, 0);
 
       // Molécula começa visível (MindAR controla visibilidade automaticamente)
       molecule.visible = true;
 
+      // Forçar visibilidade de cada átomo
+      molecule.traverse((child: any) => {
+        child.visible = true;
+        if (child.material) {
+          child.material.visible = true;
+        }
+      });
+
       anchor.group.add(molecule);
       moleculeRef.current = molecule;
+
+      // TESTE: Adicionar um cubo vermelho GRANDE para verificar renderização
+      const testCube = new threeLib.Mesh(
+        new threeLib.BoxGeometry(0.3, 0.3, 0.3),
+        new threeLib.MeshBasicMaterial({ color: 0xff0000, wireframe: false })
+      );
+      testCube.position.set(0, 0.5, 0); // Acima da molécula
+      anchor.group.add(testCube);
+      console.log(
+        "[AR] 🟥 Cubo de teste VERMELHO adicionado acima da molécula"
+      );
 
       console.log("[AR] ✅ Molécula adicionada à âncora");
       console.log(
         "[AR] 🎯 Âncora group children:",
         anchor.group.children.length
       );
+      console.log(
+        "[AR] 🎯 Âncora group.visible após adicionar molécula:",
+        anchor.group.visible
+      );
 
       // Iluminação FORTE para ver bem a molécula
-      const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); // Aumentado de 0.8 para 1.2
+      const ambientLight = new threeLib.AmbientLight(0xffffff, 1.2); // Aumentado de 0.8 para 1.2
       scene.add(ambientLight);
 
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // Aumentado de 0.6 para 1.0
+      const directionalLight = new threeLib.DirectionalLight(0xffffff, 1.0); // Aumentado de 0.6 para 1.0
       directionalLight.position.set(1, 1, 1);
       scene.add(directionalLight);
 
       // Adicionar luz adicional de trás
-      const backLight = new THREE.DirectionalLight(0xffffff, 0.5);
+      const backLight = new threeLib.DirectionalLight(0xffffff, 0.5);
       backLight.position.set(-1, -1, -1);
       scene.add(backLight);
 
@@ -225,6 +270,26 @@ export function ARMoleculeViewer() {
             "[AR] 🔍 Anchor group children:",
             anchor.group.children.length
           );
+          console.log("[AR] 🔍 Anchor group position:", anchor.group.position);
+          console.log("[AR] 🔍 Anchor group matrix:", anchor.group.matrix);
+
+          // Verificar câmera
+          if (cameraRef.current) {
+            console.log("[AR] 📷 Camera position:", cameraRef.current.position);
+            console.log("[AR] 📷 Camera rotation:", cameraRef.current.rotation);
+          }
+
+          // Verificar renderizador
+          if (rendererRef.current) {
+            console.log(
+              "[AR] 🎨 Renderer info:",
+              rendererRef.current.info.render
+            );
+            console.log(
+              "[AR] 🎨 Renderer autoClear:",
+              rendererRef.current.autoClear
+            );
+          }
 
           // Verificar cada átomo
           moleculeRef.current.children.forEach((child, i) => {
@@ -260,7 +325,17 @@ export function ARMoleculeViewer() {
           console.error("[AR] Nome do erro:", err?.name);
           console.error("[AR] Mensagem do erro:", err?.message);
           console.error("[AR] Stack:", err?.stack);
-          throw err;
+
+          const normalizedError =
+            err instanceof Error
+              ? err
+              : err && typeof err === "object" && "message" in err
+              ? (err as Error)
+              : new Error(
+                  "MindAR.start() falhou sem detalhes. Verifique permissões e uso da câmera."
+                );
+
+          throw normalizedError;
         });
 
         console.log(
@@ -308,6 +383,24 @@ export function ARMoleculeViewer() {
         console.log("[AR] 🎨 Estilos de canvas aplicados");
 
         console.log("[AR] ✅ Inicialização completa!");
+
+        // CRÍTICO: Iniciar o loop de renderização do MindAR manualmente
+        console.log("[AR] 🎬 Iniciando loop de renderização MindAR...");
+
+        const renderLoop = () => {
+          animationIdRef.current = requestAnimationFrame(renderLoop);
+
+          // Rotacionar molécula quando marcador detectado
+          if (moleculeRef.current && markerDetectedRef.current) {
+            moleculeRef.current.rotation.y += 0.01;
+          }
+
+          // Renderizar usando MindAR
+          renderer.render(scene, camera);
+        };
+
+        renderLoop();
+        console.log("[AR] ✅ Loop de renderização ativo!");
       } catch (error) {
         console.error("[AR] ❌ Erro ao iniciar MindAR:", error);
 
@@ -328,7 +421,8 @@ export function ARMoleculeViewer() {
           // Erro de dispositivo em uso
           if (
             error.name === "NotReadableError" ||
-            error.message?.includes("Device in use")
+            error.message?.includes("Device in use") ||
+            error.message?.includes("allocate videosource")
           ) {
             throw new Error(
               "🎥 CÂMERA EM USO!\n\n" +
@@ -360,34 +454,7 @@ export function ARMoleculeViewer() {
         );
       }
 
-      // Animação
-      const animate = () => {
-        animationIdRef.current = requestAnimationFrame(animate);
-
-        if (moleculeRef.current) {
-          // Sempre animar a molécula quando ela existir
-          // MindAR já controla a visibilidade baseado no marcador
-
-          // Aplicar rotação manual do usuário se marcador detectado
-          if (markerDetectedRef.current) {
-            moleculeRef.current.rotation.x = rotationRef.current.x;
-            moleculeRef.current.rotation.y += 0.005; // Rotação automática lenta
-            moleculeRef.current.rotation.y += rotationRef.current.y * 0.01;
-
-            // Aplicar escala do zoom (base 0.3 agora)
-            moleculeRef.current.scale.set(
-              0.3 * scaleRef.current,
-              0.3 * scaleRef.current,
-              0.3 * scaleRef.current
-            );
-          } else {
-            // Quando marcador não está visível, rotação suave automática
-            moleculeRef.current.rotation.y += 0.005;
-          }
-        }
-      };
-      animate();
-
+      // Loop de renderização já foi iniciado acima após mindarThree.start()
       // Event listeners para interações touch no canvas
       const canvas = renderer.domElement;
 
